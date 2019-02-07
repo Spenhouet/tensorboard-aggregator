@@ -7,6 +7,7 @@
 import ast
 import argparse
 import os
+from pathlib import Path
 
 import pandas as pd
 import numpy as np
@@ -18,8 +19,11 @@ FOLDER_NAME = 'aggregates'
 
 
 def extract(dpath, subpath):
-    scalar_accumulators = [EventAccumulator(os.path.join(dpath, dname, subpath)).Reload(
+    scalar_accumulators = [EventAccumulator(str(dpath / dname / subpath)).Reload(
     ).scalars for dname in os.listdir(dpath) if dname != FOLDER_NAME]
+
+    # Filter non event files
+    scalar_accumulators = [scalar_accumulator for scalar_accumulator in scalar_accumulators if scalar_accumulator.Keys()]
 
     # Get and validate all scalar keys
     all_keys = [tuple(scalar_accumulator.Keys()) for scalar_accumulator in scalar_accumulators]
@@ -43,7 +47,7 @@ def extract(dpath, subpath):
 
 
 def write_summary(dpath, dname, fname, aggregations_per_key, steps, wall_times):
-    fpath = os.path.join(dpath, dname, fname)
+    fpath = dpath / dname / fname
     writer = tf.summary.FileWriter(fpath)
 
     for key, aggregations in aggregations_per_key.items():
@@ -56,15 +60,15 @@ def write_summary(dpath, dname, fname, aggregations_per_key, steps, wall_times):
 
 
 def write_csv(dpath, dname, fname, aggregations_per_key, steps, wall_times):
-    if not os.path.exists(dpath):
+    if not dpath.exists():
         os.makedirs(dpath)
 
     df = pd.DataFrame(np.transpose(list(aggregations_per_key.values())), index=steps, columns=aggregations_per_key.keys())
-    df.to_csv(os.path.join(dpath, dname + '_' + fname + '.csv'), sep=';')
+    df.to_csv(dpath / (dname + '_' + fname + '.csv'), sep=';')
 
 
 def aggregate(dpath, output, subpaths):
-    name = os.path.basename(dpath)
+    name = dpath.name
 
     aggregation_ops = [np.mean, np.min, np.max, np.median, np.std]
 
@@ -79,7 +83,7 @@ def aggregate(dpath, output, subpaths):
 
     for op in aggregation_ops:
         for subpath, (values_per_key, steps, wall_times) in extracts_per_subpath.items():
-            path = os.path.join(dpath, FOLDER_NAME, subpath)
+            path = dpath / FOLDER_NAME / subpath
             aggregations_per_key = {key: op(values, axis=0) for key, values in values_per_key.items()}
             write_ops.get(output)(path, op.__name__, name, aggregations_per_key, steps, wall_times)
 
@@ -100,10 +104,12 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    if not os.path.exists(args.path):
-        raise argparse.ArgumentTypeError("Parameter {} is not a valid path".format(args.path))
+    path = Path(args.path)
 
-    subpaths = [os.path.join(args.path, dname, subpath) for subpath in args.subpaths for dname in os.listdir(args.path)]
+    if not path.exists():
+        raise argparse.ArgumentTypeError("Parameter {} is not a valid path".format(path))
+
+    subpaths = [path / dname / subpath for subpath in args.subpaths for dname in os.listdir(path)]
 
     for subpath in subpaths:
         if not os.path.exists(subpath):
@@ -112,4 +118,4 @@ if __name__ == '__main__':
     if args.output not in ['summary', 'csv']:
         raise argparse.ArgumentTypeError("Parameter {} is not summary or csv".format(args.output))
 
-    aggregate(args.path, args.output, args.subpaths)
+    aggregate(path, args.output, args.subpaths)
