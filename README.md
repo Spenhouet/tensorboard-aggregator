@@ -1,12 +1,12 @@
 # tensorboard-aggregator
 
-This project contains an easy to use method to aggregate multiple tensorboard runs. The max, min, mean, median and standard deviation of the scalars from multiple runs is saved either as new tensorboard summary or as `.csv` table.
+This project contains an easy to use method to aggregate multiple tensorboard runs. The max, min, mean, median, standard deviation and variance of the scalars from multiple runs is saved either as new tensorboard summary or as `.csv` table.
 
 ## Feature Overview
 
 - Aggregates scalars of multiple tensorboard files
 - Saves aggregates as new tensorboard summary or as `.csv`
-- Aggregate by any numpy function (default: max, min, mean, median, std)
+- Aggregate by any numpy function (default: max, min, mean, median, std, var)
 - Allows any number of subpath structures
 - Keeps step numbering
 - Saves wall time average per step
@@ -115,7 +115,7 @@ The `.csv` files are primarily for latex plots.
 
 - The aggregation only works for scalars and not for other types like histograms 
 - All runs for one aggregation need the exact same tags. Basically the naming and number of scalar metrics needs to be equal for all runs.
-- All runs for one aggregation need the same steps. Basically the number of iterations, epochs and the saving frequency needs to be equal for all runs.
+- All runs for one aggregation need the same steps. Basically the number of iterations, epochs and the saving frequency needs to be equal for all runs of one scalar.
 
 ## Contributions
 

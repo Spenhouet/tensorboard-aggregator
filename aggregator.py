@@ -7,6 +7,7 @@
 import ast
 import argparse
 import os
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -27,30 +28,46 @@ def extract(dpath, subpath):
 
     # Get and validate all scalar keys
     all_keys = [tuple(scalar_accumulator.Keys()) for scalar_accumulator in scalar_accumulators]
-    assert len(set(all_keys)) == 1, 'All runs need to have the same scalar keys'
+    assert len(set(all_keys)) == 1, "All runs need to have the same scalar keys. There are mismatches in {}".format(all_keys)
     keys = all_keys[0]
 
     all_scalar_events_per_key = [[scalar_accumulator.Items(key) for scalar_accumulator in scalar_accumulators] for key in keys]
 
-    # Get and validate all steps
-    all_steps = [tuple(scalar_event.step for scalar_event in scalar_events) for scalar_events in all_scalar_events_per_key[0]]
-    assert len(set(all_steps)) == 1, 'All runs need to have the same number of steps and the same step numbering'
-    steps = all_steps[0]
+    # Get and validate all steps per key
+    all_steps_per_key = [[tuple(scalar_event.step for scalar_event in scalar_events) for scalar_events in all_scalar_events]
+                         for all_scalar_events in all_scalar_events_per_key]
 
-    # Get and average wall times per step
-    wall_times = np.mean([tuple(scalar_event.wall_time for scalar_event in scalar_events) for scalar_events in all_scalar_events_per_key[0]], axis=0)
+    for i, all_steps in enumerate(all_steps_per_key):
+        assert len(set(all_steps)) == 1, "For scalar {} the step numbering or count doesn't match. Step count for all runs: {}".format(
+            keys[i], [len(steps) for steps in all_steps])
 
-    values_per_key = {key: [[scalar_event.value for scalar_event in scalar_events] for scalar_events in all_scalar_events]
-                      for key, all_scalar_events in zip(keys, all_scalar_events_per_key)}
+    steps_per_key = [all_steps[0] for all_steps in all_steps_per_key]
 
-    return values_per_key, steps, wall_times
+    # Get and average wall times per step per key
+    wall_times_per_key = [np.mean([tuple(scalar_event.wall_time for scalar_event in scalar_events) for scalar_events in all_scalar_events], axis=0)
+                          for all_scalar_events in all_scalar_events_per_key]
+
+    # Get values per step per key
+    values_per_key = [[[scalar_event.value for scalar_event in scalar_events] for scalar_events in all_scalar_events]
+                      for all_scalar_events in all_scalar_events_per_key]
+
+    all_per_key = dict(zip(keys, zip(steps_per_key, wall_times_per_key, values_per_key)))
+
+    return all_per_key
 
 
-def write_summary(dpath, dname, fname, aggregations_per_key, steps, wall_times):
-    fpath = dpath / dname / fname
-    writer = tf.summary.FileWriter(fpath)
+def aggregate_to_summary(dpath, aggregation_ops, extracts_per_subpath):
+    for op in aggregation_ops:
+        for subpath, all_per_key in extracts_per_subpath.items():
+            path = dpath / FOLDER_NAME / op.__name__ / dpath.name / subpath
+            aggregations_per_key = {key: (steps, wall_times, op(values, axis=0)) for key, (steps, wall_times, values) in all_per_key.items()}
+            write_summary(path, aggregations_per_key)
 
-    for key, aggregations in aggregations_per_key.items():
+
+def write_summary(dpath, aggregations_per_key):
+    writer = tf.summary.FileWriter(dpath)
+
+    for key, (steps, wall_times, aggregations) in aggregations_per_key.items():
         for step, wall_time, aggregation in zip(steps, wall_times, aggregations):
             summary = tf.Summary(value=[tf.Summary.Value(tag=key, simple_value=aggregation)])
             scalar_event = Event(wall_time=wall_time, step=step, summary=summary)
@@ -59,33 +76,45 @@ def write_summary(dpath, dname, fname, aggregations_per_key, steps, wall_times):
         writer.flush()
 
 
-def write_csv(dpath, dname, fname, aggregations_per_key, steps, wall_times):
-    if not dpath.exists():
-        os.makedirs(dpath)
+def aggregate_to_csv(dpath, aggregation_ops, extracts_per_subpath):
+    for subpath, all_per_key in extracts_per_subpath.items():
+        for key, (steps, wall_times, values) in all_per_key.items():
+            aggregations = [op(values, axis=0) for op in aggregation_ops]
+            write_csv(dpath, subpath, key, dpath.name, aggregations, steps, aggregation_ops)
 
-    df = pd.DataFrame(np.transpose(list(aggregations_per_key.values())), index=steps, columns=aggregations_per_key.keys())
-    df.to_csv(dpath / (dname + '_' + fname + '.csv'), sep=';')
+
+def get_valid_filename(s):
+    s = str(s).strip().replace(' ', '_')
+    return re.sub(r'(?u)[^-\w.]', '', s)
+
+
+def write_csv(dpath, subpath, key, fname, aggregations, steps, aggregation_ops):
+    path = dpath / FOLDER_NAME
+
+    if not path.exists():
+        os.makedirs(path)
+
+    file_name = get_valid_filename(key) + '-' + get_valid_filename(subpath) + '-' + fname + '.csv'
+    aggregation_ops_names = [aggregation_op.__name__ for aggregation_op in aggregation_ops]
+    df = pd.DataFrame(np.transpose(aggregations), index=steps, columns=aggregation_ops_names)
+    df.to_csv(path / file_name, sep=';')
 
 
 def aggregate(dpath, output, subpaths):
     name = dpath.name
 
-    aggregation_ops = [np.mean, np.min, np.max, np.median, np.std]
+    aggregation_ops = [np.mean, np.min, np.max, np.median, np.std, np.var]
 
-    write_ops = {
-        'summary': write_summary,
-        'csv': write_csv
+    ops = {
+        'summary': aggregate_to_summary,
+        'csv': aggregate_to_csv
     }
 
     print("Started aggregation {}".format(name))
 
     extracts_per_subpath = {subpath: extract(dpath, subpath) for subpath in subpaths}
 
-    for op in aggregation_ops:
-        for subpath, (values_per_key, steps, wall_times) in extracts_per_subpath.items():
-            path = dpath / FOLDER_NAME / subpath
-            aggregations_per_key = {key: op(values, axis=0) for key, values in values_per_key.items()}
-            write_ops.get(output)(path, op.__name__, name, aggregations_per_key, steps, wall_times)
+    ops.get(output)(dpath, aggregation_ops, extracts_per_subpath)
 
     print("Ended aggregation {}".format(name))
 
@@ -109,7 +138,7 @@ if __name__ == '__main__':
     if not path.exists():
         raise argparse.ArgumentTypeError("Parameter {} is not a valid path".format(path))
 
-    subpaths = [path / dname / subpath for subpath in args.subpaths for dname in os.listdir(path)]
+    subpaths = [path / dname / subpath for subpath in args.subpaths for dname in os.listdir(path) if dname != FOLDER_NAME]
 
     for subpath in subpaths:
         if not os.path.exists(subpath):
