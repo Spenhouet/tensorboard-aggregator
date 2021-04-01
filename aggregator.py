@@ -128,7 +128,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--path", type=str, help="main path for tensorboard files", default=os.getcwd())
-    parser.add_argument("--subpaths", type=param_list, help="subpath structures", default=['test', 'train'])
+    parser.add_argument("--subpaths", type=param_list, help="subpath structures", default=['.'])
     parser.add_argument("--output", type=str, help="aggregation can be saved as tensorboard file (summary) or as table (csv)", default='summary')
 
     args = parser.parse_args()
