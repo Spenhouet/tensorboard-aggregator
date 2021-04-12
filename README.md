@@ -2,6 +2,8 @@
 
 This project contains an easy to use method to aggregate multiple tensorboard runs. The max, min, mean, median, standard deviation and variance of the scalars from multiple runs is saved either as new tensorboard summary or as `.csv` table.
 
+There is a similar tool by [Janosh Riebesell](https://github.com/janosh) which uses pytorch to output the tensorboard summary: [TensorBoard Reducer](https://github.com/janosh/tensorboard-reducer)
+
 ## Feature Overview
 
 - Aggregates scalars of multiple tensorboard files
@@ -23,7 +25,7 @@ This project contains an easy to use method to aggregate multiple tensorboard ru
 | Parameter    |          | Default                   | Description |
 | ------------ | -------- | ------------------------- | ----------- |
 | _--path_     | optional | current working directory | Path to folder containing runs |
-| _--subpaths_ | optional | `['test', 'train']`       | List of all subpaths |
+| _--subpaths_ | optional | `['.']`       | List of all subpaths |
 | _--output_   | optional | `summary`                 | Possible values: `summary`, `csv` |
 
 ### Recommendation
