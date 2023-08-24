@@ -121,7 +121,10 @@ The `.csv` files are primarily for latex plots.
 
 ## Contributions
 
-If there are potential problems (bugs, incompatibilities to newer library versions or to a OS) or feature requests, please create an GitHub issue [here](https://github.com/Spenhouet/tensorboard-aggregator/issues). 
+If there are potential problems (bugs, incompatibilities to newer library versions or to a OS) or feature requests, please create an GitHub issue [here](https://github.com/Spenhouet/tensorboard-aggregator/issues).
+
+Dependencies are managed using [pip-tools](https://github.com/jazzband/pip-tools).
+Just add new dependencies to `requirements.in` and generate a new `requirements.txt` using `pip-compile` in the command line.
 
 ## License
 

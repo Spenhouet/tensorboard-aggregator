@@ -65,16 +65,13 @@ def aggregate_to_summary(dpath, aggregation_ops, extracts_per_subpath):
 
 
 def write_summary(dpath, aggregations_per_key):
-    writer = tf.summary.FileWriter(dpath)
+    writer = tf.summary.create_file_writer(str(dpath))
 
     for key, (steps, wall_times, aggregations) in aggregations_per_key.items():
         for step, wall_time, aggregation in zip(steps, wall_times, aggregations):
-            summary = tf.Summary(value=[tf.Summary.Value(tag=key, simple_value=aggregation)])
-            scalar_event = Event(wall_time=wall_time, step=step, summary=summary)
-            writer.add_event(scalar_event)
-
-        writer.flush()
-
+            with writer.as_default():
+                tf.summary.scalar(key, aggregation, step=step)
+                writer.flush()
 
 def aggregate_to_csv(dpath, aggregation_ops, extracts_per_subpath):
     for subpath, all_per_key in extracts_per_subpath.items():
