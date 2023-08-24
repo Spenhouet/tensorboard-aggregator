@@ -1,0 +1,5 @@
+pip-tools
+pandas
+numpy
+tensorflow
+tensorboard
